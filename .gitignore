@@ -11,6 +11,8 @@
 # Keil / ARM build products
 **/Objects/
 **/Listings/
+REMOTE_F401_V3.2/MDK-ARM/REMOTE_F401_V3.2/
+DRONE_F401-V4.4_同学基础适配版/MDK-ARM/DRONE_F401-V4.2/
 **/*.o
 **/*.d
 **/*.crf
