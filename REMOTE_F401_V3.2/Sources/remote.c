@@ -592,7 +592,7 @@ static void sample_live_channels(void)
       ADC_ConvertedValue[REMOTE_ADC_THR_INDEX],
       g_cfg.adc_min[REMOTE_ADC_THR_INDEX],
       g_cfg.adc_max[REMOTE_ADC_THR_INDEX],
-      0U) + offset.thr);
+      1U) + offset.thr);
   yaw = (uint16_t)(map_center_channel(
       ADC_ConvertedValue[REMOTE_ADC_YAW_INDEX],
       g_cfg.adc_min[REMOTE_ADC_YAW_INDEX],
@@ -1857,8 +1857,6 @@ void NRF_SEND(void)
     tx_data[len] += tx_data[i];
   }
 
-  if (NRF24L01_TxPacket((uint8_t *)&tx_data, len + 1U) == TX_OK)
-  {
-    g_last_rf_link_tick = SysTick_count; // 无ACK模式下，TX_OK表示本次控制包已发出。
-  }
+  (void)NRF24L01_TxPacket((uint8_t *)&tx_data, len + 1U);
+  g_last_rf_link_tick = SysTick_count; // 无ACK模式下按周期发送刷新首页信号显示。
 }
