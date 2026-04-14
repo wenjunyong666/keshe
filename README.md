@@ -4,6 +4,7 @@
 
 - `REMOTE_F401_V3.2`：遥控器工程。
 - `DRONE_F401-V4.4_同学基础适配版`：基于同学原始飞控工程继续适配后的飞控工程。
+- `GroundStation_AeroDock`：适配当前遥控器 CDC 转发链路的新版 PyQt 地面站。
 
 ## 当前功能重点
 
@@ -12,6 +13,7 @@
 - 飞控休眠为软休眠：收到遥控器“上锁且无操作”状态后开始计时，到时关闭电机输出和 LED 状态，但保留 NRF 通信。
 - 遥控器和飞控的休眠时间都会写入 Flash；飞控侧会在启动时从 Flash 恢复休眠时间。
 - 飞控的配对参数和休眠参数共用同一 Flash 扇区保存，写入时会一起保存，避免互相覆盖。
+- 地面站保留 ANO V4.5 串口解析、PID 读取/写入/重置/保存命令，界面改为 AeroDock 左侧链路坞 + 右侧仪表舱风格，和参考工程有明显区分。
 
 ## 编译方式
 
@@ -28,3 +30,9 @@
 ```
 
 最近一次验证结果：两个工程均为 `0 Error(s), 0 Warning(s)`。
+
+地面站语法检查：
+
+```powershell
+python -m compileall D:\keshe2\GroundStation_AeroDock\ground_station
+```

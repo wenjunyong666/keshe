@@ -7,6 +7,8 @@
 !REMOTE_F401_V3.2/**
 !DRONE_F401-V4.4_同学基础适配版/
 !DRONE_F401-V4.4_同学基础适配版/**
+!GroundStation_AeroDock/
+!GroundStation_AeroDock/**
 
 # Keil / ARM build products
 **/Objects/
@@ -32,6 +34,15 @@ DRONE_F401-V4.4_同学基础适配版/MDK-ARM/DRONE_F401-V4.2/
 **/*.dbgconf
 **/JLinkSettings.ini
 **/JLinkLog.txt*
+
+# Python / PyInstaller generated files
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+GroundStation_AeroDock/build/
+GroundStation_AeroDock/dist/
+GroundStation_AeroDock/*.log
+GroundStation_AeroDock/.venv/
 
 # Large third-party test packs that are not required for these Keil projects.
 **/Drivers/CMSIS/DSP/
