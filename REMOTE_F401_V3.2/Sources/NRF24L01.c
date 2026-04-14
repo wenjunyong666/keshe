@@ -117,7 +117,7 @@ uint8_t NRF24L01_TxPacket(uint8_t *txbuf,uint8_t len)
 #endif
   HAL_GPIO_WritePin(NRF24L01_CE_GPIO_Port, NRF24L01_CE_Pin, GPIO_PIN_SET);//启动发送
   sta=NRF24L01_Read_Reg(STATUS);  //读取状态寄存器的值
-  while(((sta & (TX_OK | MAX_TX)) == 0U) && (cnt < 2000U))
+  while(((sta & (TX_OK | MAX_TX)) == 0U) && (cnt < 10000U))
   { sta=NRF24L01_Read_Reg(STATUS);  //读取状态寄存器的值
     cnt++;
   }  

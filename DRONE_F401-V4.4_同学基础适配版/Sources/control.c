@@ -134,8 +134,7 @@ void MotorControl(void)
         status = WAITING_2;
       }
     case WAITING_2: //解锁完成后判断使用者是否开始拨动遥杆进行飞行控制
-      ResetMotorPidOutput(); // T通道已确认正常，低油门待起转时先清空姿态修正量。
-      if(Remote.thr>1200)
+      if(Remote.thr>1100)
       {
         status = PROCESS_31;
       }
@@ -151,7 +150,7 @@ void MotorControl(void)
           status = WAITING_2;
           break;
         }
-        MOTOR1 = MOTOR2 = MOTOR3 = MOTOR4 = LIMIT(temp,0,800); // 给姿态控制留更多余量
+        MOTOR1 = MOTOR2 = MOTOR3 = MOTOR4 = LIMIT(temp,0,900); //留100给姿态控制
 
         MOTOR1 +=    + pidRateX.out + pidRateY.out + pidRateZ.out ;//姿态输出分配给各个电机的控制量;
         MOTOR2 +=    - pidRateX.out + pidRateY.out - pidRateZ.out;
