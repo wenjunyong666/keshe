@@ -9,7 +9,7 @@
 static uint8_t TX_ADDRESS[TX_ADR_WIDTH]={0x11,0x22,0x33,0x44,0x55}; //发送地址
 static uint8_t RX_ADDRESS[RX_ADR_WIDTH]={0x11,0x22,0x33,0x44,0x55}; //接收地址
 static uint8_t NRF_CHANNEL = 0;
-extern SPI_HandleTypeDef hspi1; 
+extern SPI_HandleTypeDef hspi1;
 
 void NRF24L01_SetChannelAddress(uint8_t channel, const uint8_t *addr)
 {
@@ -106,26 +106,26 @@ uint8_t NRF24L01_Write_Buf(uint8_t reg, uint8_t *pBuf, uint8_t len)
 uint8_t NRF24L01_TxPacket(uint8_t *txbuf,uint8_t len)
 {
   uint8_t sta;
-  uint16_t cnt=0;  
-  //SPIx_SetSpeed(SPI_SPEED_8);//spi速度为9Mhz（24L01的最大SPI时钟为10Mhz）   
+  uint16_t cnt=0;
+  //SPIx_SetSpeed(SPI_SPEED_8);//spi速度为9Mhz（24L01的最大SPI时钟为10Mhz）
   HAL_GPIO_WritePin(NRF24L01_CE_GPIO_Port, NRF24L01_CE_Pin, GPIO_PIN_RESET);
   NRF24L01_Write_Reg(FLUSH_TX,0xff); // Clear stale TX payload before each send.
 #if EN_DYNAMIC_DATA_LENGTH//if使能动态数据长度
   NRF24L01_Write_Buf(WR_TX_PLOAD,txbuf,len);//写数据到TX BUF  最多32个字节
 #else
-  NRF24L01_Write_Buf(WR_TX_PLOAD,txbuf,TX_PLOAD_WIDTH);//写数据到TX BUF  最多32个字节  
+  NRF24L01_Write_Buf(WR_TX_PLOAD,txbuf,TX_PLOAD_WIDTH);//写数据到TX BUF  最多32个字节
 #endif
   HAL_GPIO_WritePin(NRF24L01_CE_GPIO_Port, NRF24L01_CE_Pin, GPIO_PIN_SET);//启动发送
   sta=NRF24L01_Read_Reg(STATUS);  //读取状态寄存器的值
-  while(((sta & (TX_OK | MAX_TX)) == 0U) && (cnt < 10000U))
+  while(((sta & (TX_OK | MAX_TX)) == 0U) && (cnt < 2000U))
   { sta=NRF24L01_Read_Reg(STATUS);  //读取状态寄存器的值
     cnt++;
-  }  
+  }
   NRF24L01_Write_Reg(NRF24L01_WRITE_REG+STATUS,sta); //清除TX_DS或MAX_RT中断标志
   if(sta&MAX_TX)//达到最大重发次数
   {
-    NRF24L01_Write_Reg(FLUSH_TX,0xff);//清除TX FIFO寄存器 
-    return MAX_TX; 
+    NRF24L01_Write_Reg(FLUSH_TX,0xff);//清除TX FIFO寄存器
+    return MAX_TX;
   }
   if(sta&TX_OK)//发送完成
   {
@@ -176,7 +176,7 @@ void RX_Mode(void)
   NRF24L01_Write_Buf(NRF24L01_WRITE_REG+RX_ADDR_P0,(uint8_t*)RX_ADDRESS,RX_ADR_WIDTH);//写RX节点地址
   //NRF24L01_Write_Reg(NRF24L01_WRITE_REG+EN_AA,0x01);    //使能通道0的自动应答    
   NRF24L01_Write_Reg(NRF24L01_WRITE_REG+EN_RXADDR,0x01);//使能通道0的接收地址     
-  NRF24L01_Write_Reg(NRF24L01_WRITE_REG+RF_CH,NRF_CHANNEL);       //设置RF通信频率      
+  NRF24L01_Write_Reg(NRF24L01_WRITE_REG+RF_CH,NRF_CHANNEL);       //设置RF通信频率
   NRF24L01_Write_Reg(NRF24L01_WRITE_REG+RX_PW_P0,RX_PLOAD_WIDTH);//选择通道0的有效数据宽度       
   NRF24L01_Write_Reg(NRF24L01_WRITE_REG+RF_SETUP,0x0f);//设置TX发射参数,0db增益,2Mbps,低噪声增益开启   
   NRF24L01_Write_Reg(NRF24L01_WRITE_REG+STATUS,0x70); //清除RX_DR、TX_DS、MAX_RT中断标志
@@ -206,11 +206,11 @@ void TX_Mode(void)
   HAL_GPIO_WritePin(NRF24L01_CE_GPIO_Port, NRF24L01_CE_Pin, GPIO_PIN_RESET);
   
   NRF24L01_Write_Buf(NRF24L01_WRITE_REG+TX_ADDR,(uint8_t*)TX_ADDRESS,TX_ADR_WIDTH);//写TX节点地址 
-  NRF24L01_Write_Buf(NRF24L01_WRITE_REG+RX_ADDR_P0,(uint8_t*)RX_ADDRESS,RX_ADR_WIDTH); //设置TX节点地址,主要为了使能ACK    
+  NRF24L01_Write_Buf(NRF24L01_WRITE_REG+RX_ADDR_P0,(uint8_t*)RX_ADDRESS,RX_ADR_WIDTH); //保留P0地址配置，兼容原发送框架
 
-  NRF24L01_Write_Reg(NRF24L01_WRITE_REG+EN_AA,0x01);     //使能通道0的自动应答    
+  NRF24L01_Write_Reg(NRF24L01_WRITE_REG+EN_AA,0x00);     //无ACK直发，避免等待应答影响控制
   NRF24L01_Write_Reg(NRF24L01_WRITE_REG+EN_RXADDR,0x01); //使能通道0的接收地址  
-  NRF24L01_Write_Reg(NRF24L01_WRITE_REG+SETUP_RETR,0x12);//设置自动重发间隔时间:500us + 86us;最大自动重发次数:2次
+  NRF24L01_Write_Reg(NRF24L01_WRITE_REG+SETUP_RETR,0x00);//无ACK模式关闭自动重发
   NRF24L01_Write_Reg(NRF24L01_WRITE_REG+RF_CH,NRF_CHANNEL);       //设置RF通道
   //NRF24L01_Write_Reg(NRF24L01_WRITE_REG+RF_SETUP,0x0f);  //设置TX发射参数,7db增益,2Mbps,低噪声增益开启   
   NRF24L01_Write_Reg(NRF24L01_WRITE_REG+RF_SETUP,0x0b);  //设置TX发射参数,0db增益,2Mbps,低噪声增益开启   
@@ -220,7 +220,7 @@ void TX_Mode(void)
 #if EN_DYNAMIC_DATA_LENGTH//if使能动态数据长度
   NRF24L01_Write_Reg(NRF24L01_WRITE_REG+DYNPD,0x01);  //DPL_P0
   //NRF24L01_Write_Reg(NRF24L01_WRITE_REG+FEATURE,0x04);//EN_DPL
-  NRF24L01_Write_Reg(NRF24L01_WRITE_REG+FEATURE,0x06);//EN_DPL+使能ACK带数据返回确认帧
+  NRF24L01_Write_Reg(NRF24L01_WRITE_REG+FEATURE,0x04);//EN_DPL，仅保留动态长度，不启用ACK载荷
 #endif  
   
   HAL_GPIO_WritePin(NRF24L01_CE_GPIO_Port, NRF24L01_CE_Pin, GPIO_PIN_SET);//CE为高,10us后启动发送

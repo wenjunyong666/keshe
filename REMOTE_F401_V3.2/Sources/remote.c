@@ -167,7 +167,7 @@ static uint16_t g_cal_min[REMOTE_STICK_AXIS_COUNT];
 static uint16_t g_cal_max[REMOTE_STICK_AXIS_COUNT];
 static uint32_t g_last_input_tick = 0;
 static uint32_t g_last_telemetry_tick = 0;
-static uint32_t g_last_rf_ack_tick = 0;
+static uint32_t g_last_rf_link_tick = 0;
 static uint32_t g_hint_until_tick = 0;
 static char g_hint_line[17] = "";
 static uint8_t g_oled_cache_valid = 0;
@@ -1314,7 +1314,7 @@ void Remote_OnTelemetry(uint8_t *data, uint8_t len)
 {
   /* [REQ-3] Try to extract FC voltage from telemetry if the packet already carries it. */
   g_last_telemetry_tick = SysTick_count;
-  g_last_rf_ack_tick = SysTick_count;
+  g_last_rf_link_tick = SysTick_count;
 
   if ((len >= 6U) && (data[0] == 0xAAU) && (data[1] == 0xAFU))
   {
@@ -1519,7 +1519,7 @@ static void set_hint(const char *text, uint16_t duration_tick)
 
 static void render_home(void)
 {
-  uint32_t link_tick = (g_last_rf_ack_tick > g_last_telemetry_tick) ? g_last_rf_ack_tick : g_last_telemetry_tick;
+  uint32_t link_tick = (g_last_rf_link_tick > g_last_telemetry_tick) ? g_last_rf_link_tick : g_last_telemetry_tick;
   uint32_t telemetry_age = (link_tick == 0U) ? 0xFFFFFFFFU : (SysTick_count - link_tick);
   uint8_t signal_level = 0U;
   /* 任务书要求：
@@ -1859,6 +1859,6 @@ void NRF_SEND(void)
 
   if (NRF24L01_TxPacket((uint8_t *)&tx_data, len + 1U) == TX_OK)
   {
-    g_last_rf_ack_tick = SysTick_count; // TX_OK说明飞控已经应答本次控制包。
+    g_last_rf_link_tick = SysTick_count; // 无ACK模式下，TX_OK表示本次控制包已发出。
   }
 }

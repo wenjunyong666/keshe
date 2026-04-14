@@ -172,7 +172,7 @@ void RX_Mode(void)
   
   //NRF24L01_Write_Buf(NRF24L01_WRITE_REG+TX_ADDR,(uint8_t*)TX_ADDRESS,TX_ADR_WIDTH);//写TX节点地址 
   NRF24L01_Write_Buf(NRF24L01_WRITE_REG+RX_ADDR_P0,(uint8_t*)RX_ADDRESS,RX_ADR_WIDTH);//写RX节点地址
-  NRF24L01_Write_Reg(NRF24L01_WRITE_REG+EN_AA,0x01);    //使能通道0的自动应答    
+  NRF24L01_Write_Reg(NRF24L01_WRITE_REG+EN_AA,0x00);    //无ACK直收，避免应答流程影响控制
   NRF24L01_Write_Reg(NRF24L01_WRITE_REG+EN_RXADDR,0x01);//使能通道0的接收地址     
   NRF24L01_Write_Reg(NRF24L01_WRITE_REG+RF_CH,NRF_CHANNEL); //频道跟随遥控器配置      
   //NRF24L01_Write_Reg(NRF24L01_WRITE_REG+RX_PW_P0,RX_PLOAD_WIDTH);//选择通道0的有效数据宽度,动态数据长度模式下不需配置       
@@ -185,7 +185,7 @@ void RX_Mode(void)
 #if EN_DYNAMIC_DATA_LENGTH//if使能动态数据长度
   NRF24L01_Write_Reg(NRF24L01_WRITE_REG+DYNPD,0x01);  //DPL_P0
   //NRF24L01_Write_Reg(NRF24L01_WRITE_REG+FEATURE,0x04);//EN_DPL
-  NRF24L01_Write_Reg(NRF24L01_WRITE_REG+FEATURE,0x04+0x02);//EN_DPL+使能ACK带数据返回确认帧
+  NRF24L01_Write_Reg(NRF24L01_WRITE_REG+FEATURE,0x04);//EN_DPL，仅保留动态长度，不启用ACK载荷
 #endif  
   HAL_GPIO_WritePin(NRF24L01_CE_GPIO_Port, NRF24L01_CE_Pin, GPIO_PIN_SET); //CE为高,进入接收模式 
   //如果不加后面这三句，则飞控板要先发送成功数据才能接收，很奇怪。 加了这三句后，上电启动就能接收
@@ -219,7 +219,7 @@ void TX_Mode(void)
 #if EN_DYNAMIC_DATA_LENGTH//if使能动态数据长度
   NRF24L01_Write_Reg(NRF24L01_WRITE_REG+DYNPD,0x01);  //DPL_P0
   //NRF24L01_Write_Reg(NRF24L01_WRITE_REG+FEATURE,0x04);//EN_DPL
-  NRF24L01_Write_Reg(NRF24L01_WRITE_REG+FEATURE,0x04+0x02);//EN_DPL+使能ACK带数据返回确认帧
+  NRF24L01_Write_Reg(NRF24L01_WRITE_REG+FEATURE,0x04);//EN_DPL，仅保留动态长度，不启用ACK载荷
 #endif  
   
   HAL_GPIO_WritePin(NRF24L01_CE_GPIO_Port, NRF24L01_CE_Pin, GPIO_PIN_SET);//CE为高,10us后启动发送

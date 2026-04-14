@@ -190,7 +190,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     { 
       // Legacy note removed because its original encoding was corrupted.
       RC_Analy();
-      NRF24L01_Write_Buf(0xa8, nrf2401_txbuf, txbuf_pos);
       nrf2401_tx_flag=1;
     }
   }
@@ -361,7 +360,6 @@ HAL_Delay(1000);
   RX_Mode();
   HAL_ADC_Start_IT(&hadc1); // Start battery-voltage ADC conversion.
 
-  NRF24L01_Write_Buf(0xa8, nrf2401_txbuf, 11); // Initialize ACK payload buffer.
   HAL_NVIC_EnableIRQ(NRF24L01_IRQ_EXTI_IRQn); // Enable NRF IRQ after NRF24L01 init is complete.
   FC_LoadSleepConfig();
 
