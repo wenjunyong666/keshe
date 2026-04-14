@@ -152,7 +152,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     // Legacy note removed because its original encoding was corrupted.
     // Legacy note removed because its original encoding was corrupted.
     // Legacy note removed because its original encoding was corrupted.
-    if(nrf_cnt>=100) 
+    // Allow short RF jitter; do not mark the link lost on one or two missed frames.
+    if(nrf_cnt>=200) 
     {
       ALL_flag.unlock = 0;
       nrf_cnt=0;
@@ -182,7 +183,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 { 
 	uint8_t sta;
   if(GPIO_Pin==NRF24L01_IRQ_Pin)
-  { nrf_cnt = 0;
+  {
+    // RC_Analy() clears nrf_cnt only after a real payload is read.
     sta=NRF24L01_Read_Reg(STATUS);
     if(sta&RX_OK)
     { 

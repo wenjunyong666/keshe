@@ -109,21 +109,18 @@ uint8_t NRF24L01_TxPacket(uint8_t *txbuf,uint8_t len)
   uint16_t cnt=0;  
   //SPIx_SetSpeed(SPI_SPEED_8);//spi速度为9Mhz（24L01的最大SPI时钟为10Mhz）   
   HAL_GPIO_WritePin(NRF24L01_CE_GPIO_Port, NRF24L01_CE_Pin, GPIO_PIN_RESET);
+  NRF24L01_Write_Reg(FLUSH_TX,0xff); // Clear stale TX payload before each send.
 #if EN_DYNAMIC_DATA_LENGTH//if使能动态数据长度
   NRF24L01_Write_Buf(WR_TX_PLOAD,txbuf,len);//写数据到TX BUF  最多32个字节
 #else
   NRF24L01_Write_Buf(WR_TX_PLOAD,txbuf,TX_PLOAD_WIDTH);//写数据到TX BUF  最多32个字节  
 #endif
   HAL_GPIO_WritePin(NRF24L01_CE_GPIO_Port, NRF24L01_CE_Pin, GPIO_PIN_SET);//启动发送
-  //while((NRF24L01_IRQ!=0)&&cnt<10000)cnt++;//等待发送完成
-  while(cnt<1000)cnt++; //等待发送完成。  奇怪，如果不加这一语句，数据经常发送不成功。
   sta=NRF24L01_Read_Reg(STATUS);  //读取状态寄存器的值
-  /*
-  while( ((sta&TX_OK)==0) && (cnt<2000) ) //发送未完成，则等待
+  while(((sta & (TX_OK | MAX_TX)) == 0U) && (cnt < 2000U))
   { sta=NRF24L01_Read_Reg(STATUS);  //读取状态寄存器的值
     cnt++;
   }  
- */  
   NRF24L01_Write_Reg(NRF24L01_WRITE_REG+STATUS,sta); //清除TX_DS或MAX_RT中断标志
   if(sta&MAX_TX)//达到最大重发次数
   {
@@ -134,6 +131,7 @@ uint8_t NRF24L01_TxPacket(uint8_t *txbuf,uint8_t len)
   {
     return TX_OK;
   }
+  NRF24L01_Write_Reg(FLUSH_TX,0xff); // Timeout/unknown state: recover TX FIFO for next frame.
   return 0xff;//其他原因发送失败
 }
 //启动NRF24L01接收一次数据
@@ -149,6 +147,12 @@ uint8_t NRF24L01_RxPacket(uint8_t *rxbuf)
   {
   #if EN_DYNAMIC_DATA_LENGTH//if使能动态数据长度
     NRF24L01_Read_Buf(R_RX_PL_WID,&len,1);//读取有效数据长度,存在len中
+    if((len == 0U) || (len > 32U))
+    {
+      NRF24L01_Write_Reg(FLUSH_RX,0xff);
+      NRF24L01_Write_Reg(NRF24L01_WRITE_REG+STATUS,RX_OK);
+      return 0;
+    }
     NRF24L01_Read_Buf(RD_RX_PLOAD,rxbuf,len);//读取len个字节数据
     NRF24L01_Write_Reg(FLUSH_RX,0xff);//清除RX FIFO寄存器 
     NRF24L01_Write_Reg(NRF24L01_WRITE_REG+STATUS,RX_OK); //清除中断标志
