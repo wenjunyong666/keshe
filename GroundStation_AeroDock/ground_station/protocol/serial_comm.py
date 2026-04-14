@@ -34,7 +34,12 @@ class SerialComm:
             details_upper = details.upper()
 
             priority = 0
-            if "JLINK CDC" in details_upper or "STLINK" in details_upper or "ST-LINK" in details_upper:
+            # The adapted remote uses STM32 USB CDC (VID:PID=0483:5740).
+            # Put it ahead of J-Link CDC; otherwise the UI tends to select the
+            # debugger COM port first and the ground station sees no telemetry.
+            if "VID:PID=0483:5740" in details_upper or "VID_0483&PID_5740" in details_upper:
+                priority = 500
+            elif "JLINK CDC" in details_upper or "STLINK" in details_upper or "ST-LINK" in details_upper:
                 priority = 300
             elif "CH340" in details_upper or "USB SERIAL" in details_upper or "USB-SERIAL" in details_upper:
                 priority = 200
@@ -44,6 +49,8 @@ class SerialComm:
             label = port.device
             if description and description != port.device:
                 label = f"{port.device} - {description}"
+            if "VID:PID=0483:5740" in details_upper or "VID_0483&PID_5740" in details_upper:
+                label = f"{label} [STM32 CDC]"
 
             result.append({
                 "device": port.device,

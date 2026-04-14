@@ -45,8 +45,12 @@ class CustomCommand(IntEnum):
 class ANOProtocol:
     """ANO 协议编解码器。"""
 
-    FRAME_HEADER_SEND = bytes([0xAA, 0xAA])
-    FRAME_HEADER_RECV = bytes([0xAA, 0xAF])
+    # Ground station commands are sent to the remote/FC with AA AF.
+    # Telemetry from this adapted FC may come back as AA AA, while the local
+    # remote-controller demo path also uses AA AA. Keep AA AF as a compatible
+    # receive header for older/alternate AnoTC-style firmware.
+    FRAME_HEADER_SEND = bytes([0xAA, 0xAF])
+    FRAME_HEADER_RECV_OPTIONS = (bytes([0xAA, 0xAA]), bytes([0xAA, 0xAF]))
 
     def __init__(self):
         self.rx_state = 0
@@ -77,7 +81,7 @@ class ANOProtocol:
                 self.rx_buffer = bytearray([byte])
 
         elif self.rx_state == 1:
-            if byte == 0xAF:
+            if byte in (0xAA, 0xAF):
                 self.rx_state = 2
                 self.rx_buffer.append(byte)
             else:
@@ -102,8 +106,13 @@ class ANOProtocol:
             self.rx_checksum = byte
             self.rx_state = 0
 
-            calc_sum = self.calculate_checksum(self.rx_buffer[2:])
-            if calc_sum == self.rx_checksum:
+            # Two checksum variants exist in the adapted codebase:
+            # 1. Remote demo frames sum func/len/payload only.
+            # 2. The FC ANTO_Send() path starts from AA+AA, so it includes the
+            #    two header bytes. Accept both so real FC and demo telemetry work.
+            calc_sum_no_header = self.calculate_checksum(self.rx_buffer[2:])
+            calc_sum_with_header = self.calculate_checksum(self.rx_buffer)
+            if self.rx_checksum in (calc_sum_no_header, calc_sum_with_header):
                 data = bytes(self.rx_buffer[4:4 + self.rx_length])
                 return self.rx_func_id, data
 
