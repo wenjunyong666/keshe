@@ -102,6 +102,21 @@ int16_t motor[4];
 #define MOTOR3 motor[2] 
 #define MOTOR4 motor[3] 
 
+static void ResetMotorPidOutput(void)
+{
+  pidRateX.out = 0;
+  pidRateY.out = 0;
+  pidRateZ.out = 0;
+  pidRateX.integ = 0;
+  pidRateY.integ = 0;
+  pidRateZ.integ = 0;
+  pidRateX.prevError = 0;
+  pidRateY.prevError = 0;
+  pidRateZ.prevError = 0;
+  pidRoll.out = 0;
+  pidPitch.out = 0;
+  pidYaw.out = 0;
+}
 void MotorControl(void)
 {  
   volatile static uint8_t status=WAITING_1;
@@ -113,6 +128,7 @@ void MotorControl(void)
   {    
     case WAITING_1: //等待解锁  
       MOTOR1 = MOTOR2 = MOTOR3 = MOTOR4 = 0;  //如果锁定，则电机输出都为0
+      ResetMotorPidOutput();
       if(ALL_flag.unlock)
       {
         status = WAITING_2;
@@ -130,6 +146,8 @@ void MotorControl(void)
         if(Remote.thr<1020)    //油门太低了，则限制输出  不然飞机乱转                        
         {
           MOTOR1 = MOTOR2 = MOTOR3 = MOTOR4=0;
+          ResetMotorPidOutput();
+          status = WAITING_2;
           break;
         }
         MOTOR1 = MOTOR2 = MOTOR3 = MOTOR4 = LIMIT(temp,0,900); //留100给姿态控制

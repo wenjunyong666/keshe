@@ -142,6 +142,12 @@ uint8_t NRF24L01_RxPacket(uint8_t *rxbuf)
   {
   #if EN_DYNAMIC_DATA_LENGTH//if使能动态数据长度
     NRF24L01_Read_Buf(R_RX_PL_WID,&len,1);//读取有效数据长度,存在len中
+    if((len == 0) || (len > 32))
+    {
+      NRF24L01_Write_Reg(FLUSH_RX,0xff);
+      NRF24L01_Write_Reg(NRF24L01_WRITE_REG+STATUS,RX_OK);
+      return 0;
+    }
     NRF24L01_Read_Buf(RD_RX_PLOAD,rxbuf,len);//读取len个字节数据
     NRF24L01_Write_Reg(FLUSH_RX,0xff);//清除RX FIFO寄存器 
     NRF24L01_Write_Reg(NRF24L01_WRITE_REG+STATUS,RX_OK); //清除中断标志
