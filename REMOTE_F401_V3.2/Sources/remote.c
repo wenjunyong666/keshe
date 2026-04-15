@@ -224,6 +224,7 @@ static void schedule_rf_switch(uint8_t pair_hint);
 static uint8_t service_rf_switch(void);
 static void send_fc_sleep_command(void);
 static void send_rf_pair_command(void);
+static void send_fc_cal_command(void);
 static void send_remote_command_frame(uint8_t func_id, const uint8_t *payload, uint8_t payload_len, uint8_t repeat);
 static void enter_standby_if_needed(void);
 static void set_safe_channels(void);
@@ -414,6 +415,16 @@ static void send_rf_pair_command(void)
   payload[4] = (uint8_t)(g_cfg.rf_addr_23 >> 8);
   payload[5] = (uint8_t)(g_cfg.rf_addr_4 & 0xFFU);
   send_remote_command_frame(0x04U, payload, sizeof(payload), 5U);
+}
+
+static void send_fc_cal_command(void)
+{
+  uint8_t payload[1] = {0xA5U};
+
+  /* Remote -> FC calibration command.
+   * The FC executes calibration in its main loop, not in the NRF interrupt.
+   */
+  send_remote_command_frame(0x06U, payload, sizeof(payload), 5U);
 }
 
 static void center_trim_calibration(void)
@@ -988,8 +999,8 @@ static void handle_s1_short(void)
   }
   else if (g_state == REMOTE_STATE_MENU_FC_CAL)
   {
-    /* [REQ-7] Send a short calibration trigger window to the flight controller. */
-    g_fc_cal_ticks = 100;
+    /* [REQ-7] Send an explicit calibration command to the flight controller. */
+    send_fc_cal_command();
     g_state = REMOTE_STATE_MENU_ROOT;
     set_hint(ZH_HINT_FC_CAL, 150);
   }

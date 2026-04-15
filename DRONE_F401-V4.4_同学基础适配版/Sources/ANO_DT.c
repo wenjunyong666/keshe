@@ -40,6 +40,7 @@ static volatile uint8_t g_pair_save_channel = 0U;
 static volatile uint8_t g_pair_save_addr[5] = {0x11, 0x22, 0x33, 0x44, 0x55};
 static volatile uint8_t g_sleep_save_pending = 0U; // Deferred Flash save flag for FC sleep settings.
 static volatile uint16_t g_sleep_save_seconds = 60U;
+static volatile uint8_t g_fc_cal_pending = 0U;     // Deferred IMU calibration request from remote menu.
 
 static void FC_DefaultPair(uint8_t *channel, uint8_t *addr)
 {
@@ -164,6 +165,15 @@ void ANO_ServicePairSave(void)
     }
     Reset_Idle();
   }
+
+  if(g_fc_cal_pending != 0U)
+  {
+    g_fc_cal_pending = 0U;
+    ALL_flag.unlock = 0;       // Calibrate only from a safe locked state.
+    Reset_Idle();
+    MPU6050_Calibrate();
+    FLASH_WriteByte(CALIB_FLAG_ADDR, 0xAAU);
+  }
 }
 void ANO_Recive(uint8_t *pt)
 {
@@ -279,6 +289,13 @@ void ANO_Recive(uint8_t *pt)
         g_fc_idle_sleep_seconds = requested_sleep_seconds;
         g_sleep_save_seconds = requested_sleep_seconds;
         g_sleep_save_pending = 1U;
+      }
+      break;
+    case ANTO_MOTOR: // 0x06: remote menu requests IMU calibration
+      if((pt[3] >= 1U) && (pt[4] == 0xA5U))
+      {
+        Reset_Idle();
+        g_fc_cal_pending = 1U; /* Execute later in main loop, never inside NRF IRQ. */
       }
       break;
     case ANTO_RATE_PID:

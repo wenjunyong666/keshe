@@ -199,7 +199,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 { uint16_t adv;
   adv=HAL_ADC_GetValue(&hadc1);
   voltage=adv*430/4096;
-  if (voltage<315)
+  if (voltage<360)
   {
     ALL_flag.unlock = 0;
     LED.status =WARNING;
