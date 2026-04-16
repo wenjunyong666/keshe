@@ -387,8 +387,10 @@ static void send_remote_command_frame(uint8_t func_id, const uint8_t *payload, u
   {
     /* Mirror the outgoing command frame to USB before NRF TX for bench testing. */
     Remote_MirrorTxFrame_ToUsb(frame, frame_len);
+    TX_Mode();
     NRF24L01_TxPacket(frame, frame_len);
   }
+  RX_Mode();
 }
 
 static void send_fc_sleep_command(void)
@@ -1868,6 +1870,8 @@ void NRF_SEND(void)
     tx_data[len] += tx_data[i];
   }
 
+  TX_Mode();
   (void)NRF24L01_TxPacket((uint8_t *)&tx_data, len + 1U);
+  RX_Mode();
   g_last_rf_link_tick = SysTick_count; // 无ACK模式下按周期发送刷新首页信号显示。
 }

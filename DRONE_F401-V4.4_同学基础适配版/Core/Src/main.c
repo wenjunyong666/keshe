@@ -130,6 +130,27 @@ void Reset_Idle(void)
   fc_soft_sleeping = 0U;
 }
 
+static void FC_SendTelemetryWindow(void)
+{
+  uint8_t len = txbuf_pos;
+
+  if(len == 0U)
+  {
+    return;
+  }
+  if(len > 32U)
+  {
+    len = 32U;
+  }
+
+  /* Send one cached ANO telemetry frame, then immediately return to RX.
+     This gives the ground station data without enabling NRF ACK payloads. */
+  RX2TX();
+  (void)NRF24L01_TxPacket(nrf2401_txbuf, len);
+  TX2RX();
+  txbuf_pos = 0U;
+}
+
 extern uint8_t RC_rxData[32];
 //uint8_t cnt_angle=0;
 uint8_t SPL06_cnt=0,SPL06_flag=0;
@@ -386,6 +407,7 @@ HAL_Delay(1000);
     ANTO_polling();
     PilotLED();
     ANTO_polling();
+    FC_SendTelemetryWindow();
     PilotLED();
     //OPTICAL2Read();
     if(uart1_flag)
