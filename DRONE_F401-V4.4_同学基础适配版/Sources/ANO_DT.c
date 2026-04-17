@@ -213,11 +213,29 @@ void ANO_ServicePairSave(void)
 
   if(g_fc_cal_pending != 0U)
   {
+    uint8_t cal_type = g_fc_cal_pending;
     g_fc_cal_pending = 0U;
-    ALL_flag.unlock = 0;       // Calibrate only from a safe locked state.
-    Reset_Idle();
-    MPU6050_Calibrate();
-    FLASH_WriteByte(CALIB_FLAG_ADDR, 0xAAU);
+
+    if(cal_type == 1U)
+    {
+      // IMU calibration
+      ALL_flag.unlock = 0;
+      Reset_Idle();
+      MPU6050_Calibrate();
+      FLASH_WriteByte(CALIB_FLAG_ADDR, 0xAAU);
+    }
+    else if(cal_type == 2U)
+    {
+      // PID reset - reload from Flash or defaults
+      // TODO: Implement PID reload from Flash
+      Reset_Idle();
+    }
+    else if(cal_type == 3U)
+    {
+      // PID save - save current PID to Flash
+      // TODO: Implement PID save to Flash
+      Reset_Idle();
+    }
   }
 }
 void ANO_Recive(uint8_t *pt)
@@ -374,6 +392,14 @@ void ANO_Recive(uint8_t *pt)
     case ANTO_PID5:   
       break;
     case ANTO_PID6:
+      break;
+    case 0xF0:  // RESET_PID - reload PID from Flash or defaults
+      g_fc_cal_pending = 2U;  // Use value 2 to indicate PID reset
+      Reset_Idle();
+      break;
+    case 0xF1:  // SAVE_PID - save current PID to Flash
+      g_fc_cal_pending = 3U;  // Use value 3 to indicate PID save
+      Reset_Idle();
       break;
     case 0x01:
 
