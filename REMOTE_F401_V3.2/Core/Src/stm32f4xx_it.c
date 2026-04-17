@@ -1,4 +1,4 @@
-﻿/* USER CODE BEGIN Header */
+/* USER CODE BEGIN Header */
 /**
   ******************************************************************************
   * @file    stm32f4xx_it.c
@@ -69,6 +69,7 @@ extern uint32_t SysTick_count;
 extern volatile uint8_t g_remote_soft_sleeping;
 
 extern uint8_t nrf2401_tx_flag;
+extern uint8_t g_bridge_repeat_left;
 extern uint8_t nrf2401_buf[];
 extern uint8_t buf_pos;
 
@@ -207,10 +208,18 @@ void SysTick_Handler(void)
     if(nrf2401_tx_flag==2)
     {
       RX2TX();
-      NRF24L01_TxPacket((uint8_t*)&nrf2401_buf,buf_pos); // send queued NRF packet // send queued NRF packet
+      NRF24L01_TxPacket((uint8_t*)&nrf2401_buf,buf_pos); // send queued NRF packet
       TX2RX();
-      nrf2401_tx_flag=0;
-      buf_pos=0;
+      if(g_bridge_repeat_left > 1U)
+      {
+        g_bridge_repeat_left--;
+      }
+      else
+      {
+        g_bridge_repeat_left=0U;
+        nrf2401_tx_flag=0;
+        buf_pos=0;
+      }
     }
   }
   else if(cnt_10ms>=10)
@@ -306,4 +315,5 @@ void OTG_FS_IRQHandler(void)
 /* USER CODE BEGIN 1 */
 
 /* USER CODE END 1 */
+
 

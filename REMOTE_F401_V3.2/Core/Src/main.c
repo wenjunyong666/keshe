@@ -65,6 +65,7 @@ uint8_t RC_rxData[32];
 uint8_t rxlen=0;
 
 uint8_t nrf2401_tx_flag=0;
+uint8_t g_bridge_repeat_left=0U;
 uint8_t nrf2401_buf[33];
 uint8_t buf_pos=0;
 
@@ -692,6 +693,8 @@ void Bridge_Command_Byte(uint8_t revdata)
 /* [REQ-USB] ����λ��һ֡��������ʱ��֪ͨ��ѭ��������֡�жϡ�?*/
 void Bridge_Command_Frame_End(void)
 {
+  /* USB/ground-station commands use no NRF ACK, so repeat briefly to reduce packet loss. */
+  g_bridge_repeat_left = 4U;
   nrf2401_tx_flag = 1;
 }
 
@@ -1191,4 +1194,6 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
+
+
 

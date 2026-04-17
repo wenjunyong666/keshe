@@ -638,8 +638,8 @@ send_pid:
     case ANTO_CHECK:
          if(g_ack_pending != 0U)
          {
-           pt[5] = (int8_t)g_ack_target;
-           pt[4] = (int8_t)g_ack_result;
+           pt[4] = (int8_t)g_ack_target;
+           pt[5] = (int8_t)g_ack_result;
            g_ack_pending = 0U;
          }
          else if(ANTO_Recived_flag.PID1)
