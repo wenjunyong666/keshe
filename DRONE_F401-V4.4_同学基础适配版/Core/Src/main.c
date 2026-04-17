@@ -138,21 +138,16 @@ void Reset_Idle(void)
 static void FC_SendTelemetryWindow(void)
 {
   static uint32_t last_telemetry_tx_tick = 0U;
+  static uint32_t last_control_rx_tick = 0U;
   uint32_t now = HAL_GetTick();
   uint8_t len = txbuf_pos;
+  uint32_t min_interval;
 
-  /* Do not steal NRF airtime while the aircraft is unlocked.  The remote
-     control packets have priority; telemetry can resume after locking. */
-  if(ALL_flag.unlock != 0U)
+  /* Update last control frame receive time */
+  extern uint32_t last_nrf_rx_time;
+  if(last_nrf_rx_time != last_control_rx_tick)
   {
-    return;
-  }
-
-  /* Keep telemetry sparse because this project does not use NRF ACK payloads.
-     Each active send briefly switches the FC radio away from RX mode. */
-  if((now - last_telemetry_tx_tick) < 120U)
-  {
-    return;
+    last_control_rx_tick = last_nrf_rx_time;
   }
 
   if(len == 0U)
@@ -164,8 +159,30 @@ static void FC_SendTelemetryWindow(void)
     len = 32U;
   }
 
-  /* Send one cached ANO telemetry frame, then immediately return to RX.
-     This gives the ground station data without enabling NRF ACK payloads. */
+  /* Adaptive telemetry rate:
+     - Locked: 1Hz (1000ms) - keep remote signal indicator alive
+     - Unlocked: 20Hz (50ms) - full telemetry for ground station
+     Only send when recently received control frames to avoid wasting airtime. */
+  if(ALL_flag.unlock == 0U)
+  {
+    min_interval = 1000U;  /* Locked: 1Hz keepalive */
+  }
+  else
+  {
+    min_interval = 50U;    /* Unlocked: 20Hz full telemetry */
+  }
+
+  if((now - last_control_rx_tick) > 100U)
+  {
+    return;  /* No recent control frame: remote may not be listening */
+  }
+
+  if((now - last_telemetry_tx_tick) < min_interval)
+  {
+    return;  /* Rate limit */
+  }
+
+  /* Send telemetry in brief TX window between control frames */
   RX2TX();
   (void)NRF24L01_TxPacket(nrf2401_txbuf, len);
   TX2RX();
@@ -177,6 +194,7 @@ extern uint8_t RC_rxData[32];
 //uint8_t cnt_angle=0;
 uint8_t SPL06_cnt=0,SPL06_flag=0;
 uint8_t volt_cnt=0;
+uint32_t last_nrf_rx_time = 0U;  /* Timestamp of last control frame received */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 { 
   if(htim==&htim1)
@@ -223,15 +241,16 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{ 
+{
 	uint8_t sta;
   if(GPIO_Pin==NRF24L01_IRQ_Pin)
   {
     // RC_Analy() clears nrf_cnt only after a real payload is read.
     sta=NRF24L01_Read_Reg(STATUS);
     if(sta&RX_OK)
-    { 
+    {
       // Legacy note removed because its original encoding was corrupted.
+      last_nrf_rx_time = HAL_GetTick();  /* Record control frame receive time */
       RC_Analy();
       nrf2401_tx_flag=1;
     }

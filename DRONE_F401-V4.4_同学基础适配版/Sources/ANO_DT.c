@@ -43,6 +43,10 @@ static volatile uint8_t g_pair_save_addr[5] = {0x11, 0x22, 0x33, 0x44, 0x55};
 static volatile uint8_t g_sleep_save_pending = 0U; // Deferred Flash save flag for FC sleep settings.
 static volatile uint16_t g_sleep_save_seconds = 60U;
 static volatile uint8_t g_fc_cal_pending = 0U;     // Deferred IMU calibration request from remote menu.
+static uint8_t g_telemetry_round_robin = 0U;
+static uint32_t g_last_status_tick = 0U;
+static uint32_t g_last_sensor_tick = 0U;
+static uint32_t g_last_power_tick = 0U;
 
 static void FC_DefaultPair(uint8_t *channel, uint8_t *addr)
 {
@@ -486,12 +490,60 @@ send_pid:
 void ANTO_polling(void)
 {
   volatile static uint8_t status = 1;
+  uint32_t now = HAL_GetTick();
+  uint32_t status_interval, sensor_interval, power_interval;
+
+  /* Adaptive telemetry generation rate:
+     - Locked: slow (500ms/1000ms/2000ms) - minimal keepalive
+     - Unlocked: fast (50ms/100ms/200ms) - full ground station telemetry */
+  if(ALL_flag.unlock == 0U)
+  {
+    status_interval = 500U;
+    sensor_interval = 1000U;
+    power_interval = 2000U;
+  }
+  else
+  {
+    status_interval = 50U;
+    sensor_interval = 100U;
+    power_interval = 200U;
+  }
+
   switch(status)
   {
     case 1:
-      /* Ground station receive is now remote-USB-only.  Do not enqueue FC
-         telemetry here, otherwise the FC has to switch NRF into TX and can
-         miss dense control packets. */
+      /* Send telemetry in round-robin fashion. Check only the current frame type
+         to ensure all three types get sent in order. */
+      if(nrf2401_tx_flag==1)
+      {
+        if(g_telemetry_round_robin == 0U)
+        {
+          if((now - g_last_status_tick) >= status_interval)
+          {
+            ANTO_Send(ANTO_STATUS);
+            g_last_status_tick = now;
+            g_telemetry_round_robin = 1U;
+          }
+        }
+        else if(g_telemetry_round_robin == 1U)
+        {
+          if((now - g_last_sensor_tick) >= sensor_interval)
+          {
+            ANTO_Send(ANTO_MPU_MAGIC);
+            g_last_sensor_tick = now;
+            g_telemetry_round_robin = 2U;
+          }
+        }
+        else
+        {
+          if((now - g_last_power_tick) >= power_interval)
+          {
+            ANTO_Send(ANTO_POWER);
+            g_last_power_tick = now;
+            g_telemetry_round_robin = 0U;
+          }
+        }
+      }
       if(*(uint8_t*)&ANTO_Recived_flag != 0)
         status = 2;
       break;
