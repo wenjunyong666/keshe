@@ -9,6 +9,7 @@ AeroDock 地面站主窗口。
 
 import math
 import time
+from collections import deque
 
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtWidgets import (
@@ -168,10 +169,12 @@ class MainWindow(QMainWindow):
         self.pending_ack_name = None
         self.pending_ack_target = None
         self.current_serial_ports = []
-        self.telemetry_received.connect(self.process_received_data)
+        self.telemetry_queue = deque(maxlen=160)
+        self.telemetry_flush_timer = None
         self.init_ui()
         self.init_comm()
         self.init_link_monitor()
+        self.init_telemetry_flush()
 
     def init_ui(self):
         """初始化完全不同于参考工程的左右分舱界面。"""
@@ -318,6 +321,17 @@ class MainWindow(QMainWindow):
         self.link_timer = QTimer(self)
         self.link_timer.timeout.connect(self.check_link_state)
         self.link_timer.start(300)
+
+    def init_telemetry_flush(self):
+        """Drain received frames on the UI thread at a fixed pace.
+
+        The remote forwards STATUS/SENSOR/POWER frames quickly. Updating Qt
+        widgets once per frame can starve the event loop, so the serial thread
+        only appends to a bounded queue and this timer consumes small batches.
+        """
+        self.telemetry_flush_timer = QTimer(self)
+        self.telemetry_flush_timer.timeout.connect(self.flush_telemetry_queue)
+        self.telemetry_flush_timer.start(20)
 
     def set_link_text(self, text: str, quick: str):
         """统一刷新左侧链路牌和右上角状态胶囊。"""
@@ -502,7 +516,21 @@ class MainWindow(QMainWindow):
 
     def on_data_received(self, func_id: int, data: bytes):
         """串口线程收到数据后切回 UI 线程处理。"""
-        self.telemetry_received.emit(int(func_id), bytes(data))
+        # Keep the serial thread non-blocking; the UI timer drains this queue.
+        self.telemetry_queue.append((int(func_id), bytes(data)))
+
+    def flush_telemetry_queue(self):
+        """Process a bounded batch so telemetry bursts cannot freeze the UI."""
+        latest_by_func = {}
+        processed = 0
+
+        while self.telemetry_queue and processed < 32:
+            func_id, data = self.telemetry_queue.popleft()
+            latest_by_func[func_id] = data
+            processed += 1
+
+        for func_id, data in latest_by_func.items():
+            self.process_received_data(func_id, data)
 
     def process_received_data(self, func_id: int, data: bytes):
         """在 UI 主线程中处理飞控数据。"""
@@ -616,6 +644,9 @@ class MainWindow(QMainWindow):
         """关闭窗口时释放资源。"""
         if self.simulator_timer and self.simulator_timer.isActive():
             self.stop_simulator()
+
+        if self.telemetry_flush_timer and self.telemetry_flush_timer.isActive():
+            self.telemetry_flush_timer.stop()
 
         if self.is_connected():
             self.disconnect_device()

@@ -83,7 +83,7 @@ uint8_t uart_rx_len = 0;
 // FC soft-sleep timing state
 uint32_t idle_tick = 0;          // last non-idle tick for FC soft sleep
 uint8_t fc_sleep_counting = 0U;  // only count down after remote reports locked-idle
-static uint8_t fc_soft_sleeping = 0U;
+uint8_t fc_soft_sleeping = 0U;
 #define SLEEP_TIME 60000         // legacy 60s timeout value
 
 // IMU calibration Flash flag
