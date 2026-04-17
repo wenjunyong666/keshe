@@ -22,6 +22,7 @@ extern uint8_t nrf2401_tx_flag;
 
 extern UART_HandleTypeDef huart1;
 extern uint32_t baro_height;
+extern uint16_t voltage;
 extern void Reset_Idle(void);
 
 static struct{
@@ -41,6 +42,7 @@ static volatile uint8_t g_pair_save_addr[5] = {0x11, 0x22, 0x33, 0x44, 0x55};
 static volatile uint8_t g_sleep_save_pending = 0U; // Deferred Flash save flag for FC sleep settings.
 static volatile uint16_t g_sleep_save_seconds = 60U;
 static volatile uint8_t g_fc_cal_pending = 0U;     // Deferred IMU calibration request from remote menu.
+static volatile uint8_t g_pending_pid_read_mask = 0U; // Ground station can read one PID group at a time.
 
 static void FC_DefaultPair(uint8_t *channel, uint8_t *addr)
 {
@@ -308,22 +310,55 @@ void ANO_Recive(uint8_t *pt)
       }
       break;
     case ANTO_RATE_PID:
-      ANTO_Recived_flag.PID1 = 1;
-      memcpy(RatePID,&pt[4],19);
+      if(pt[3] == 0U)
+      {
+        g_pending_pid_read_mask |= (1U << 0);
+      }
+      else if(pt[3] >= 18U)
+      {
+        ANTO_Recived_flag.PID1 = 1;
+        memcpy(RatePID,&pt[4],18);
+      }
       break;
     case ANTO_ANGLE_PID:
-      memcpy(AnglePID,&pt[4],19);
-      ANTO_Recived_flag.PID2 = 1;
+      if(pt[3] == 0U)
+      {
+        g_pending_pid_read_mask |= (1U << 1);
+      }
+      else if(pt[3] >= 18U)
+      {
+        memcpy(AnglePID,&pt[4],18);
+        ANTO_Recived_flag.PID2 = 1;
+      }
       break;
     case ANTO_HEIGHT_PID:
-      memcpy(HighPID,&pt[4],19);
-      ANTO_Recived_flag.PID3 = 1;
+      if(pt[3] == 0U)
+      {
+        g_pending_pid_read_mask |= (1U << 2);
+      }
+      else if(pt[3] >= 18U)
+      {
+        memcpy(HighPID,&pt[4],18);
+        ANTO_Recived_flag.PID3 = 1;
+      }
       break;
     case ANTO_PID4:
+      if(pt[3] == 0U)
+      {
+        g_pending_pid_read_mask |= (1U << 3);
+      }
       break;
     case ANTO_PID5:   
+      if(pt[3] == 0U)
+      {
+        g_pending_pid_read_mask |= (1U << 4);
+      }
       break;
     case ANTO_PID6:
+      if(pt[3] == 0U)
+      {
+        g_pending_pid_read_mask |= (1U << 5);
+      }
       break;
     case 0x01:
 
@@ -349,6 +384,8 @@ static void ANTO_Send(const enum ANTO_SEND FUNCTION) // send data to ground stat
   PidObject *pidY=0;
   PidObject *pidZ=0;
 
+  memset(Anto, 0, sizeof(Anto));
+
   switch(FUNCTION)
   {
     case ANTO_STATUS:  //0x01  send angle
@@ -361,9 +398,16 @@ static void ANTO_Send(const enum ANTO_SEND FUNCTION) // send data to ground stat
          Anto[7] = (0x01<<8)|(ALL_flag.unlock);
          len = 12;
          break;
-    case ANTO_MPU_MAGIC:
-         memcpy(&Anto[2],(int8_t*)&MPU6050,sizeof(_st_Mpu));
-         memcpy(&Anto[8],(int8_t*)&AK8975,sizeof(_st_Mag));
+     case ANTO_MPU_MAGIC:
+         Anto[2] = MPU6050.accX;
+         Anto[3] = MPU6050.accY;
+         Anto[4] = MPU6050.accZ;
+         Anto[5] = MPU6050.gyroX;
+         Anto[6] = MPU6050.gyroY;
+         Anto[7] = MPU6050.gyroZ;
+         Anto[8] = AK8975.magX;
+         Anto[9] = AK8975.magY;
+         Anto[10] = AK8975.magZ;
          len = 18;
          break;
     case ANTO_RATE_PID:      //0x10  PID1
@@ -428,8 +472,10 @@ send_pid:
     case ANTO_RCDATA:  //0x03  send RC data
 
          break;
-    case ANTO_POWER:  //0x05
-
+     case ANTO_POWER:  //0x05
+         Anto[2] = (int16_t)voltage;
+         Anto[3] = 0;
+         len = 4;
         break;
     case ANTO_MOTOR:   //0x06  send motor
 
@@ -475,15 +521,33 @@ send_pid:
 void ANTO_polling(void)
 {
   volatile static uint8_t status = 1;
+  static uint8_t telemetry_phase = 0U;
+  uint8_t group_index;
   switch(status)
   {
     case 1:
-      ANTO_Send(ANTO_STATUS);
-      if(*(uint8_t*)&ANTO_Recived_flag != 0)
+      /* Round-robin telemetry keeps attitude smooth while also feeding the
+         ground station sensor/power pages. */
+      if(telemetry_phase == 0U)
+      {
+        ANTO_Send(ANTO_STATUS);
+        telemetry_phase = 1U;
+      }
+      else if(telemetry_phase == 1U)
+      {
+        ANTO_Send(ANTO_MPU_MAGIC);
+        telemetry_phase = 2U;
+      }
+      else
+      {
+        ANTO_Send(ANTO_POWER);
+        telemetry_phase = 0U;
+      }
+      if((*(uint8_t*)&ANTO_Recived_flag != 0) || (g_pending_pid_read_mask != 0U))
         status = 2;
       break;
     case 2:
-      if(*(uint8_t*)&ANTO_Recived_flag == 0)
+      if((*(uint8_t*)&ANTO_Recived_flag == 0) && (g_pending_pid_read_mask == 0U))
       {
         status = 1;
       }
@@ -497,6 +561,19 @@ void ANTO_polling(void)
         ANTO_Send(ANTO_HEIGHT_PID);
         HAL_Delay(1);
         ANTO_Recived_flag.CMD2_READ_PID = 0;
+      }
+
+      if(g_pending_pid_read_mask != 0U)
+      {
+        for(group_index = 0U; group_index < 6U; group_index++)
+        {
+          if((g_pending_pid_read_mask & (uint8_t)(1U << group_index)) != 0U)
+          {
+            ANTO_Send((enum ANTO_SEND)(ANTO_RATE_PID + group_index));
+            g_pending_pid_read_mask &= (uint8_t)~(1U << group_index);
+            break;
+          }
+        }
       }
       
       if(*(uint8_t*)&ANTO_Recived_flag & 0x3f)

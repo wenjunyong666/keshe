@@ -121,6 +121,10 @@ void Enter_Standby(void)
   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, 0);
   ALL_flag.unlock = 0;
   LED.status = AlwaysOff;
+  HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(LED4_GPIO_Port, LED4_Pin, GPIO_PIN_SET);
   fc_soft_sleeping = 1U;
 }
 // Reset FC soft-sleep timer and wake from soft sleep.
