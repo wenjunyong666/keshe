@@ -206,7 +206,9 @@ void SysTick_Handler(void)
   {
     if(nrf2401_tx_flag==2)
     {
+      RX2TX();
       NRF24L01_TxPacket((uint8_t*)&nrf2401_buf,buf_pos); // send queued NRF packet // send queued NRF packet
+      TX2RX();
       nrf2401_tx_flag=0;
       buf_pos=0;
     }
