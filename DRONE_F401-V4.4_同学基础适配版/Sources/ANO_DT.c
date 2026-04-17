@@ -229,7 +229,13 @@ void ANO_Recive(uint8_t *pt)
 
                {
                  uint8_t rc_sleep_flags = (pt[3] >= 17U) ? pt[20] : 0U;
+                 uint8_t rc_has_lock_flag = (uint8_t)((pt[3] >= 17U) ? 1U : 0U);
+                 uint8_t rc_locked = (uint8_t)((rc_sleep_flags & 0x01U) ? 1U : 0U);
                  uint8_t rc_locked_idle = (uint8_t)(((rc_sleep_flags & 0x03U) == 0x03U) ? 1U : 0U);
+                 if(rc_has_lock_flag != 0U)
+                 {
+                   ALL_flag.unlock = (rc_locked == 0U) ? 1U : 0U;
+                 }
                  if(rc_locked_idle == 0U)
                  {
                    Reset_Idle();
@@ -251,7 +257,10 @@ void ANO_Recive(uint8_t *pt)
                        pidYaw.desired -= 0.75f;  
                      }            
                }
-               remote_unlock();
+               if(pt[3] < 17U)
+               {
+                 remote_unlock(); // Legacy remotes still use the old throttle low-high-low unlock sequence.
+               }
       break;
     case ANTO_GPSDATA: // 0x04: RF channel/address command from remote menu
       if(pt[3] >= 6U)

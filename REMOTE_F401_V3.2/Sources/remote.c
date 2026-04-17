@@ -588,7 +588,6 @@ static void save_stick_calibration_capture(void)
 
 static void sample_live_channels(void)
 {
-  static uint16_t last_thr = 1000;
   static uint16_t last_yaw = 1500;
   static uint16_t last_roll = 1500;
   static uint16_t last_pitch = 1500;
@@ -604,7 +603,7 @@ static void sample_live_channels(void)
       ADC_ConvertedValue[REMOTE_ADC_THR_INDEX],
       g_cfg.adc_min[REMOTE_ADC_THR_INDEX],
       g_cfg.adc_max[REMOTE_ADC_THR_INDEX],
-      1U) + offset.thr);
+      0U) + offset.thr);
   yaw = (uint16_t)(map_center_channel(
       ADC_ConvertedValue[REMOTE_ADC_YAW_INDEX],
       g_cfg.adc_min[REMOTE_ADC_YAW_INDEX],
@@ -633,12 +632,12 @@ static void sample_live_channels(void)
   if (pitch < 1000U) pitch = 1000U;
   if (pitch > 2000U) pitch = 2000U;
 
-  g_live_thr = (uint16_t)((thr + 3U * last_thr + 2U) >> 2);
+  /* Throttle must respond immediately; filtering here made motors spin only after a fast pull. */
+  g_live_thr = thr;
   g_live_yaw = (uint16_t)((yaw + 3U * last_yaw + 2U) >> 2);
   g_live_roll = (uint16_t)((roll + 3U * last_roll + 2U) >> 2);
   g_live_pitch = (uint16_t)((pitch + 3U * last_pitch + 2U) >> 2);
 
-  last_thr = g_live_thr;
   last_yaw = g_live_yaw;
   last_roll = g_live_roll;
   last_pitch = g_live_pitch;
