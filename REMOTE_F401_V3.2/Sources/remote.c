@@ -595,15 +595,19 @@ static void sample_live_channels(void)
   uint16_t yaw;
   uint16_t roll;
   uint16_t pitch;
+  int32_t thr_calc;
 
   /* Convert raw ADC values to 1000-2000 remote-control channels.
    * This also applies calibration, trim, simple filtering and local battery sampling.
    */
-  thr = (uint16_t)(map_linear_channel(
-      ADC_ConvertedValue[REMOTE_ADC_THR_INDEX],
-      g_cfg.adc_min[REMOTE_ADC_THR_INDEX],
-      g_cfg.adc_max[REMOTE_ADC_THR_INDEX],
-      0U) + offset.thr);
+  /* Keep T exactly like the original student remote: ADC1 / 4 + 1000.
+   * Throttle does not use the menu "return-to-center" logic, and it bypasses
+   * saved min/max calibration so stale Flash data cannot reverse or squeeze it.
+   */
+  thr_calc = 1000 + (int32_t)((ADC_ConvertedValue[REMOTE_ADC_THR_INDEX] + 2U) >> 2) + offset.thr;
+  if (thr_calc < 1000) thr_calc = 1000;
+  if (thr_calc > 2000) thr_calc = 2000;
+  thr = (uint16_t)thr_calc;
   yaw = (uint16_t)(map_center_channel(
       ADC_ConvertedValue[REMOTE_ADC_YAW_INDEX],
       g_cfg.adc_min[REMOTE_ADC_YAW_INDEX],
