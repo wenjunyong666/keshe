@@ -598,6 +598,7 @@ static void sample_live_channels(void)
   int32_t thr_calc;
   int32_t yaw_calc;
   int32_t roll_calc;
+  int32_t pitch_calc;
 
   /* Convert raw ADC values to 1000-2000 remote-control channels.
    * This also applies calibration, trim, simple filtering and local battery sampling.
@@ -624,12 +625,10 @@ static void sample_live_channels(void)
   if (roll_calc > 2000) roll_calc = 2000;
   roll = (uint16_t)roll_calc;
 
-  pitch = (uint16_t)(map_center_channel(
-      ADC_ConvertedValue[REMOTE_ADC_PIT_INDEX],
-      g_cfg.adc_min[REMOTE_ADC_PIT_INDEX],
-      g_cfg.adc_mid[REMOTE_ADC_PIT_INDEX],
-      g_cfg.adc_max[REMOTE_ADC_PIT_INDEX],
-      0U) + offset.pitch);
+  pitch_calc = 1000 + (int32_t)((ADC_ConvertedValue[REMOTE_ADC_PIT_INDEX] + 2U) >> 2) + offset.pitch;
+  if (pitch_calc < 1000) pitch_calc = 1000;
+  if (pitch_calc > 2000) pitch_calc = 2000;
+  pitch = (uint16_t)pitch_calc;
 
   if (thr < 1000U) thr = 1000U;
   if (thr > 2000U) thr = 2000U;
