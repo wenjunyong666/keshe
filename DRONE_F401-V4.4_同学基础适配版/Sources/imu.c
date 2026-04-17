@@ -193,6 +193,7 @@ void GetAngle(const _st_Mpu *pMpu,_st_AngE *pAngE, float dt)
   //float NormAcc;  
   float NormQuat; 
   float HalfTime = dt * 0.5f;
+  float acc_norm_sq;
 
   
 
@@ -200,8 +201,17 @@ void GetAngle(const _st_Mpu *pMpu,_st_AngE *pAngE, float dt)
   Gravity.x = 2*(NumQ.q1 * NumQ.q3 - NumQ.q0 * NumQ.q2);                
   Gravity.y = 2*(NumQ.q0 * NumQ.q1 + NumQ.q2 * NumQ.q3);              
   Gravity.z = 1-2*(NumQ.q1 * NumQ.q1 + NumQ.q2 * NumQ.q2);  
-  // 加速度归一化
- NormAcc = Q_rsqrt(squa(MPU6050.accX)+ squa(MPU6050.accY) +squa(MPU6050.accZ));
+  // Guard early invalid MPU samples so quaternion state is not poisoned.
+  acc_norm_sq = squa(pMpu->accX) + squa(pMpu->accY) + squa(pMpu->accZ);
+  if((acc_norm_sq < 1.0f) || !isfinite(acc_norm_sq))
+  {
+    return;
+  }
+  NormAcc = Q_rsqrt(acc_norm_sq);
+  if(!isfinite(NormAcc))
+  {
+    return;
+  }
   
     Acc.x = pMpu->accX * NormAcc;
     Acc.y = pMpu->accY * NormAcc;
@@ -231,6 +241,17 @@ void GetAngle(const _st_Mpu *pMpu,_st_AngE *pAngE, float dt)
   NumQ.q3 += q3_t;
   // 四元数归一化
   NormQuat = Q_rsqrt(squa(NumQ.q0) + squa(NumQ.q1) + squa(NumQ.q2) + squa(NumQ.q3));
+  if(!isfinite(NormQuat))
+  {
+    NumQ.q0 = 1.0f;
+    NumQ.q1 = 0.0f;
+    NumQ.q2 = 0.0f;
+    NumQ.q3 = 0.0f;
+    GyroIntegError.x = 0.0f;
+    GyroIntegError.y = 0.0f;
+    GyroIntegError.z = 0.0f;
+    return;
+  }
   NumQ.q0 *= NormQuat;
   NumQ.q1 *= NormQuat;
   NumQ.q2 *= NormQuat;
@@ -257,7 +278,4 @@ void GetAngle(const _st_Mpu *pMpu,_st_AngE *pAngE, float dt)
 
 
 /***************************************************END OF FILE***************************************************/
-
-
-
 
