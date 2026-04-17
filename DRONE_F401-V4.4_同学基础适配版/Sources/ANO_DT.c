@@ -25,7 +25,6 @@ extern uint32_t baro_height;
 extern uint16_t voltage;
 extern void Reset_Idle(void);
 extern uint8_t fc_sleep_counting;
-extern uint8_t fc_soft_sleeping;
 
 static struct{
   uint8_t PID1 :1;
@@ -44,10 +43,6 @@ static volatile uint8_t g_pair_save_addr[5] = {0x11, 0x22, 0x33, 0x44, 0x55};
 static volatile uint8_t g_sleep_save_pending = 0U; // Deferred Flash save flag for FC sleep settings.
 static volatile uint16_t g_sleep_save_seconds = 60U;
 static volatile uint8_t g_fc_cal_pending = 0U;     // Deferred IMU calibration request from remote menu.
-static uint8_t g_telemetry_round_robin = 0U;
-static uint32_t g_last_status_tick = 0U;
-static uint32_t g_last_sensor_tick = 0U;
-static uint32_t g_last_power_tick = 0U;
 
 static void FC_DefaultPair(uint8_t *channel, uint8_t *addr)
 {
@@ -491,43 +486,12 @@ send_pid:
 void ANTO_polling(void)
 {
   volatile static uint8_t status = 1;
-  uint32_t now = HAL_GetTick();
   switch(status)
   {
     case 1:
-      /* Fixed5-style telemetry cadence: attitude, raw MPU/mag and power are
-         sent in turns, so the ground station cards stay aligned with real data. */
-      if((fc_soft_sleeping!=0U) || (nrf2401_tx_flag!=1))
-      {
-        break;
-      }
-      switch(g_telemetry_round_robin)
-      {
-        case 0U:
-          if((now - g_last_status_tick) >= 20U)
-          {
-            ANTO_Send(ANTO_STATUS);
-            g_last_status_tick = now;
-            g_telemetry_round_robin = 1U;
-          }
-          break;
-        case 1U:
-          if((now - g_last_sensor_tick) >= 40U)
-          {
-            ANTO_Send(ANTO_MPU_MAGIC);
-            g_last_sensor_tick = now;
-            g_telemetry_round_robin = 2U;
-          }
-          break;
-        default:
-          if((now - g_last_power_tick) >= 100U)
-          {
-            ANTO_Send(ANTO_POWER);
-            g_last_power_tick = now;
-            g_telemetry_round_robin = 0U;
-          }
-          break;
-      }
+      /* Ground station receive is now remote-USB-only.  Do not enqueue FC
+         telemetry here, otherwise the FC has to switch NRF into TX and can
+         miss dense control packets. */
       if(*(uint8_t*)&ANTO_Recived_flag != 0)
         status = 2;
       break;

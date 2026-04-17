@@ -150,6 +150,15 @@ static uint8_t Demo_Mode_Active(void)
   return (uint8_t)((SysTick_count - g_last_fc_rx_tick) > 150U);
 }
 
+static uint8_t GroundUsb_Telemetry_Active(void)
+{
+  /* Ground station telemetry is generated on the remote USB side only.
+   * It does not request anything from the FC and does not switch the NRF role,
+   * so motor control packets keep owning the radio link.
+   */
+  return CDC_IsConfigured_FS();
+}
+
 static uint8_t Build_Ano_Frame(uint8_t func_id, const uint8_t *payload, uint8_t payload_len, uint8_t *out_frame)
 {
   uint8_t i;
@@ -468,7 +477,7 @@ static void Demo_Pump_Telemetry(void)
 {
   uint8_t group_index;
 
-  if ((CDC_IsConfigured_FS() == 0U) || (Demo_Mode_Active() == 0U))
+  if (GroundUsb_Telemetry_Active() == 0U)
   {
     return;
   }
@@ -498,7 +507,7 @@ static void Demo_Pump_Telemetry(void)
   }
 
   /* [REQ-DEMO] 无飞控时分时发送 3 类遥测，避免一口气连发造成 CDC Busy。 */
-  if ((SysTick_count - g_demo_status_tick) >= 5U)
+  if ((SysTick_count - g_demo_status_tick) >= 20U)
   {
     if (Demo_Send_Status_Frame() != 0U)
     {
@@ -507,7 +516,7 @@ static void Demo_Pump_Telemetry(void)
     }
   }
 
-  if ((SysTick_count - g_demo_sensor_tick) >= 10U)
+  if ((SysTick_count - g_demo_sensor_tick) >= 40U)
   {
     if (Demo_Send_Sensor_Frame() != 0U)
     {
@@ -516,7 +525,7 @@ static void Demo_Pump_Telemetry(void)
     }
   }
 
-  if ((SysTick_count - g_demo_power_tick) >= 20U)
+  if ((SysTick_count - g_demo_power_tick) >= 100U)
   {
     if (Demo_Send_Power_Frame() != 0U)
     {
