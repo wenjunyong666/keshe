@@ -52,11 +52,9 @@ class Model3DWidget(QGLWidget):
         glTranslatef(0.0, 0.0, self.zoom)
 
         # 应用姿态旋转（注意顺序：Yaw -> Pitch -> Roll）
-        # Convert FC aircraft-axis attitude to this OpenGL model frame.
-        # Numeric cards still show the raw protocol values; only the 3D view is adapted.
-        glRotatef(-self.yaw, 0.0, 1.0, 0.0)
-        glRotatef(-self.pitch, 1.0, 0.0, 0.0)
-        glRotatef(-self.roll, 0.0, 0.0, 1.0)
+        glRotatef(self.yaw, 0.0, 1.0, 0.0)
+        glRotatef(self.pitch, 1.0, 0.0, 0.0)
+        glRotatef(self.roll, 0.0, 0.0, 1.0)
 
         # 绘制飞机模型
         self.draw_aircraft()

@@ -45,18 +45,13 @@ void RC_Analy(void)
   if(rxlen>0)
   { uint8_t i;
     uint8_t CheckSum=0;
-    uint8_t CheckSumNoHeader=0;
     //send_char_array(&huart6,RC_rxData,rxlen);
     nrf_cnt = 0;
     for(i=0;i<rxlen-1;i++)
     {
       CheckSum +=  RC_rxData[i];
-      if(i >= 2U)
-      {
-        CheckSumNoHeader += RC_rxData[i];
-      }
     }
-    if((RC_rxData[rxlen-1] == CheckSum) || (RC_rxData[rxlen-1] == CheckSumNoHeader))
+    if(RC_rxData[rxlen-1]==CheckSum)
     {
       /* Accept both direct RC packets (AA AF) and station packets relayed by RC (AA AA). */
       if(RC_rxData[0]==0xAA && ((RC_rxData[1]==0xAF) || (RC_rxData[1]==0xAA)))
