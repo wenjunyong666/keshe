@@ -54,3 +54,17 @@ void FLASH_EraseSectorByAddr(uint32_t addr)
     HAL_FLASHEx_Erase(&erase, &sector_error);
     HAL_FLASH_Lock();
 }
+
+void FLASH_WriteFloat(uint32_t addr, float value)
+{
+    uint32_t data = *((uint32_t*)&value);
+    HAL_FLASH_Unlock();
+    HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, addr, data);
+    HAL_FLASH_Lock();
+}
+
+float FLASH_ReadFloat(uint32_t addr)
+{
+    uint32_t data = *(__IO uint32_t*)addr;
+    return *((float*)&data);
+}

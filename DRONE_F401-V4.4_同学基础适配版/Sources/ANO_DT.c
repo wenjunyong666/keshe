@@ -64,6 +64,7 @@ extern uint32_t baro_height;
 extern uint16_t voltage;
 extern void Reset_Idle(void);
 extern uint8_t fc_sleep_counting;
+extern void pid_param_Init(void);
 
 static struct{
   uint8_t PID1 :1;
@@ -75,17 +76,28 @@ static struct{
   uint8_t CMD2_READ_PID:1;
 }ANTO_Recived_flag;
 
-uint16_t g_fc_idle_sleep_seconds = 60U;  // FC soft-sleep timeout in seconds, loaded from Flash at boot.
-static volatile uint8_t g_pair_save_pending = 0U;  // Deferred Flash save flag for RF pair settings.
+uint16_t g_fc_idle_sleep_seconds = 60U;
+static volatile uint8_t g_pair_save_pending = 0U;
 static volatile uint8_t g_pair_save_channel = 0U;
 static volatile uint8_t g_pair_save_addr[5] = {0x11, 0x22, 0x33, 0x44, 0x55};
-static volatile uint8_t g_sleep_save_pending = 0U; // Deferred Flash save flag for FC sleep settings.
+static volatile uint8_t g_sleep_save_pending = 0U;
 static volatile uint16_t g_sleep_save_seconds = 60U;
-static volatile uint8_t g_fc_cal_pending = 0U;     // Deferred IMU calibration request from remote menu.
+static volatile uint8_t g_fc_cal_pending = 0U;
 static uint8_t g_telemetry_round_robin = 0U;
 static uint32_t g_last_status_tick = 0U;
 static uint32_t g_last_sensor_tick = 0U;
 static uint32_t g_last_power_tick = 0U;
+static uint8_t g_ack_pending = 0U;
+static uint8_t g_ack_target = 0U;
+static uint8_t g_ack_result = 0U;
+
+#define PID_FLASH_ADDR 0x0803F030
+#define PID_MAGIC_ADDR 0x0803F02E
+#define PID_MAGIC 0x5A
+#define PID_VALUE_COUNT 24U
+
+extern void FLASH_WriteFloat(uint32_t addr, float value);
+extern float FLASH_ReadFloat(uint32_t addr);
 
 static void FC_DefaultPair(uint8_t *channel, uint8_t *addr)
 {
@@ -115,8 +127,64 @@ static void FC_ReadPairOrDefault(uint8_t *channel, uint8_t *addr)
   }
 }
 
+static uint8_t FC_ReadSavedPIDValues(float *values)
+{
+  uint8_t i;
+  uint32_t addr = PID_FLASH_ADDR;
+
+  if((values == NULL) || (FLASH_ReadByte(PID_MAGIC_ADDR) != PID_MAGIC))
+  {
+    return 0U;
+  }
+
+  for(i = 0U; i < PID_VALUE_COUNT; i++)
+  {
+    values[i] = FLASH_ReadFloat(addr);
+    addr += 4U;
+  }
+  return 1U;
+}
+
+static void FC_WriteSavedPIDValues(const float *values)
+{
+  uint8_t i;
+  uint32_t addr = PID_FLASH_ADDR;
+
+  if(values == NULL)
+  {
+    return;
+  }
+
+  for(i = 0U; i < PID_VALUE_COUNT; i++)
+  {
+    FLASH_WriteFloat(addr, values[i]);
+    addr += 4U;
+  }
+  FLASH_WriteByte(PID_MAGIC_ADDR, PID_MAGIC);
+}
+
+static void FC_CaptureCurrentPIDValues(float *values)
+{
+  if(values == NULL)
+  {
+    return;
+  }
+
+  values[0] = pidRateX.kp;      values[1] = pidRateX.ki;      values[2] = pidRateX.kd;
+  values[3] = pidRateY.kp;      values[4] = pidRateY.ki;      values[5] = pidRateY.kd;
+  values[6] = pidRateZ.kp;      values[7] = pidRateZ.ki;      values[8] = pidRateZ.kd;
+  values[9] = pidRoll.kp;       values[10] = pidRoll.ki;      values[11] = pidRoll.kd;
+  values[12] = pidPitch.kp;     values[13] = pidPitch.ki;     values[14] = pidPitch.kd;
+  values[15] = pidYaw.kp;       values[16] = pidYaw.ki;       values[17] = pidYaw.kd;
+  values[18] = pidHeightRate.kp;values[19] = pidHeightRate.ki;values[20] = pidHeightRate.kd;
+  values[21] = pidHeightHigh.kp;values[22] = pidHeightHigh.ki;values[23] = pidHeightHigh.kd;
+}
+
 static void FC_SavePairAndSleep(uint8_t channel, const uint8_t *addr, uint16_t sleep_seconds)
 {
+  float saved_pid[PID_VALUE_COUNT];
+  uint8_t has_saved_pid = FC_ReadSavedPIDValues(saved_pid);
+
   if(channel > 125U)
   {
     channel = 125U;
@@ -139,6 +207,11 @@ static void FC_SavePairAndSleep(uint8_t channel, const uint8_t *addr, uint16_t s
   FLASH_WriteByte(FC_SLEEP_ADDR, (uint8_t)(sleep_seconds & 0xFFU));
   FLASH_WriteByte(FC_SLEEP_ADDR + 1U, (uint8_t)((sleep_seconds >> 8) & 0xFFU));
   FLASH_WriteByte(FC_SLEEP_MAGIC_ADDR, FC_SLEEP_MAGIC);
+
+  if(has_saved_pid != 0U)
+  {
+    FC_WriteSavedPIDValues(saved_pid);
+  }
 }
 
 void FC_LoadSleepConfig(void)
@@ -161,6 +234,55 @@ void FC_SaveSleepConfig(uint16_t seconds)
 
   FC_ReadPairOrDefault(&channel, addr);
   FC_SavePairAndSleep(channel, addr, seconds);
+}
+
+static void FC_SavePID(void)
+{
+  float values[PID_VALUE_COUNT];
+  uint8_t channel;
+  uint8_t addr[5];
+  uint8_t i;
+
+  FC_CaptureCurrentPIDValues(values);
+  FC_ReadPairOrDefault(&channel, addr);
+
+  if(channel > 125U)
+  {
+    channel = 125U;
+  }
+
+  FLASH_EraseSectorByAddr(PAIR_ADDR);
+  FLASH_WriteByte(PAIR_ADDR, channel);
+  for(i = 0U; i < 5U; i++)
+  {
+    FLASH_WriteByte(PAIR_ADDR + 1U + i, addr[i]);
+  }
+  FLASH_WriteByte(PAIR_FLAG, PAIR_MAGIC);
+  FLASH_WriteByte(PAIR_BUILD_ADDR, (uint8_t)(PAIR_BUILD_ID & 0xFFU));
+  FLASH_WriteByte(PAIR_BUILD_ADDR + 1U, (uint8_t)((PAIR_BUILD_ID >> 8) & 0xFFU));
+  FLASH_WriteByte(FC_SLEEP_ADDR, (uint8_t)(g_fc_idle_sleep_seconds & 0xFFU));
+  FLASH_WriteByte(FC_SLEEP_ADDR + 1U, (uint8_t)((g_fc_idle_sleep_seconds >> 8) & 0xFFU));
+  FLASH_WriteByte(FC_SLEEP_MAGIC_ADDR, FC_SLEEP_MAGIC);
+  FC_WriteSavedPIDValues(values);
+}
+
+static void FC_LoadPID(void)
+{
+  float values[PID_VALUE_COUNT];
+
+  if(FC_ReadSavedPIDValues(values) == 0U)
+  {
+    return;
+  }
+
+  pidRateX.kp = values[0];       pidRateX.ki = values[1];       pidRateX.kd = values[2];
+  pidRateY.kp = values[3];       pidRateY.ki = values[4];       pidRateY.kd = values[5];
+  pidRateZ.kp = values[6];       pidRateZ.ki = values[7];       pidRateZ.kd = values[8];
+  pidRoll.kp = values[9];        pidRoll.ki = values[10];       pidRoll.kd = values[11];
+  pidPitch.kp = values[12];      pidPitch.ki = values[13];      pidPitch.kd = values[14];
+  pidYaw.kp = values[15];        pidYaw.ki = values[16];        pidYaw.kd = values[17];
+  pidHeightRate.kp = values[18]; pidHeightRate.ki = values[19]; pidHeightRate.kd = values[20];
+  pidHeightHigh.kp = values[21]; pidHeightHigh.ki = values[22]; pidHeightHigh.kd = values[23];
 }
 void ANO_ServicePairSave(void)
 {
@@ -226,14 +348,16 @@ void ANO_ServicePairSave(void)
     }
     else if(cal_type == 2U)
     {
-      // PID reset - reload from Flash or defaults
-      // TODO: Implement PID reload from Flash
+      FC_LoadPID();
+      if(FLASH_ReadByte(PID_MAGIC_ADDR) != PID_MAGIC)
+      {
+        pid_param_Init();
+      }
       Reset_Idle();
     }
     else if(cal_type == 3U)
     {
-      // PID save - save current PID to Flash
-      // TODO: Implement PID save to Flash
+      FC_SavePID();
       Reset_Idle();
     }
   }
@@ -366,6 +490,8 @@ void ANO_Recive(uint8_t *pt)
         g_fc_idle_sleep_seconds = requested_sleep_seconds;
         g_sleep_save_seconds = requested_sleep_seconds;
         g_sleep_save_pending = 1U;
+        fc_sleep_counting = 0U;
+        Reset_Idle();
       }
       break;
     case ANTO_MOTOR: // 0x06: remote menu requests IMU calibration
@@ -376,16 +502,37 @@ void ANO_Recive(uint8_t *pt)
       }
       break;
     case ANTO_RATE_PID:
-      ANTO_Recived_flag.PID1 = 1;
-      memcpy(RatePID,&pt[4],19);
+      if(pt[3] == 0U)
+      {
+        PidQueue_Push(ANTO_RATE_PID, NULL, 0);
+      }
+      else if(pt[3] >= 18U)
+      {
+        ANTO_Recived_flag.PID1 = 1;
+        memcpy(RatePID,&pt[4],19);
+      }
       break;
     case ANTO_ANGLE_PID:
-      memcpy(AnglePID,&pt[4],19);
-      ANTO_Recived_flag.PID2 = 1;
+      if(pt[3] == 0U)
+      {
+        PidQueue_Push(ANTO_ANGLE_PID, NULL, 0);
+      }
+      else if(pt[3] >= 18U)
+      {
+        memcpy(AnglePID,&pt[4],19);
+        ANTO_Recived_flag.PID2 = 1;
+      }
       break;
     case ANTO_HEIGHT_PID:
-      memcpy(HighPID,&pt[4],19);
-      ANTO_Recived_flag.PID3 = 1;
+      if(pt[3] == 0U)
+      {
+        PidQueue_Push(ANTO_HEIGHT_PID, NULL, 0);
+      }
+      else if(pt[3] >= 18U)
+      {
+        memcpy(HighPID,&pt[4],19);
+        ANTO_Recived_flag.PID3 = 1;
+      }
       break;
     case ANTO_PID4:
       break;
@@ -395,10 +542,18 @@ void ANO_Recive(uint8_t *pt)
       break;
     case 0xF0:  // RESET_PID - reload PID from Flash or defaults
       g_fc_cal_pending = 2U;  // Use value 2 to indicate PID reset
+      g_ack_target = 0xF0U;
+      g_ack_result = 0U;
+      g_ack_pending = 1U;
+      PidQueue_Push(ANTO_CHECK, NULL, 0);
       Reset_Idle();
       break;
     case 0xF1:  // SAVE_PID - save current PID to Flash
       g_fc_cal_pending = 3U;  // Use value 3 to indicate PID save
+      g_ack_target = 0xF1U;
+      g_ack_result = 0U;
+      g_ack_pending = 1U;
+      PidQueue_Push(ANTO_CHECK, NULL, 0);
       Reset_Idle();
       break;
     case 0x01:
@@ -481,7 +636,13 @@ send_pid:
          len = 18;
          break;
     case ANTO_CHECK:
-         if(ANTO_Recived_flag.PID1)
+         if(g_ack_pending != 0U)
+         {
+           pt[5] = (int8_t)g_ack_target;
+           pt[4] = (int8_t)g_ack_result;
+           g_ack_pending = 0U;
+         }
+         else if(ANTO_Recived_flag.PID1)
          { pt[5]=0x10;
            pt[4]=RatePID[18];
          }
@@ -555,8 +716,15 @@ send_pid:
 void ANTO_polling(void)
 {
   volatile static uint8_t status = 1;
+  static uint8_t pid_loaded_once = 0U;
   uint32_t now = HAL_GetTick();
   uint32_t status_interval, sensor_interval, power_interval;
+
+  if(pid_loaded_once == 0U)
+  {
+    FC_LoadPID();
+    pid_loaded_once = 1U;
+  }
 
   /* Adaptive telemetry generation rate:
      - Locked: slow (500ms/1000ms/2000ms) - minimal keepalive

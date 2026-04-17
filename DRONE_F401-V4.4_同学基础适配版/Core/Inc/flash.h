@@ -8,5 +8,7 @@ uint8_t FLASH_ReadByte(uint32_t addr);
 void FLASH_WriteInt16Array(uint32_t addr, int16_t *data, uint8_t len);
 void FLASH_ReadInt16Array(uint32_t addr, int16_t *data, uint8_t len);
 void FLASH_EraseSectorByAddr(uint32_t addr);
+void FLASH_WriteFloat(uint32_t addr, float value);
+float FLASH_ReadFloat(uint32_t addr);
 
 #endif
