@@ -20,6 +20,45 @@ extern uint8_t nrf2401_txbuf[];
 extern uint8_t txbuf_pos;
 extern uint8_t nrf2401_tx_flag;
 
+// PID packet queue for sequential transmission
+#define PID_QUEUE_SIZE 8
+typedef struct {
+  uint8_t func_id;  // ANTO_RATE_PID, ANTO_ANGLE_PID, etc.
+  uint8_t data[32]; // Packet payload
+  uint8_t len;      // Payload length
+} PidPacket;
+
+static struct {
+  PidPacket packets[PID_QUEUE_SIZE];
+  uint8_t head;
+  uint8_t tail;
+  uint8_t count;
+} pid_queue = {0};
+
+static void PidQueue_Push(uint8_t func_id, const uint8_t *data, uint8_t len)
+{
+  if(pid_queue.count >= PID_QUEUE_SIZE) return;
+
+  pid_queue.packets[pid_queue.tail].func_id = func_id;
+  pid_queue.packets[pid_queue.tail].len = len;
+  if(data != NULL && len > 0)
+  {
+    memcpy(pid_queue.packets[pid_queue.tail].data, data, len);
+  }
+  pid_queue.tail = (pid_queue.tail + 1) % PID_QUEUE_SIZE;
+  pid_queue.count++;
+}
+
+static uint8_t PidQueue_Pop(PidPacket *pkt)
+{
+  if(pid_queue.count == 0) return 0;
+
+  *pkt = pid_queue.packets[pid_queue.head];
+  pid_queue.head = (pid_queue.head + 1) % PID_QUEUE_SIZE;
+  pid_queue.count--;
+  return 1;
+}
+
 extern UART_HandleTypeDef huart1;
 extern uint32_t baro_height;
 extern uint16_t voltage;
@@ -516,6 +555,18 @@ void ANTO_polling(void)
          to ensure all three types get sent in order. */
       if(nrf2401_tx_flag==1)
       {
+        // Priority 1: Process PID queue if not empty
+        if(pid_queue.count > 0)
+        {
+          PidPacket pkt;
+          if(PidQueue_Pop(&pkt))
+          {
+            ANTO_Send(pkt.func_id);
+          }
+          break; // Exit to allow next packet to be sent in next cycle
+        }
+
+        // Priority 2: Normal telemetry round-robin
         if(g_telemetry_round_robin == 0U)
         {
           if((now - g_last_status_tick) >= status_interval)
@@ -554,13 +605,11 @@ void ANTO_polling(void)
       }
   
       if(ANTO_Recived_flag.CMD2_READ_PID)
-      {    
-        ANTO_Send(ANTO_RATE_PID);
-        HAL_Delay(1);
-        ANTO_Send(ANTO_ANGLE_PID);
-        HAL_Delay(1);
-        ANTO_Send(ANTO_HEIGHT_PID);
-        HAL_Delay(1);
+      {
+        // Queue all PID packets for sequential transmission
+        PidQueue_Push(ANTO_RATE_PID, NULL, 0);
+        PidQueue_Push(ANTO_ANGLE_PID, NULL, 0);
+        PidQueue_Push(ANTO_HEIGHT_PID, NULL, 0);
         ANTO_Recived_flag.CMD2_READ_PID = 0;
       }
       
@@ -570,7 +619,10 @@ void ANTO_polling(void)
           PidObject *pidY=0;
           PidObject *pidZ=0;
           uint8_t *P;
-          ANTO_Send(ANTO_CHECK);
+
+          // Queue ACK response instead of sending immediately
+          PidQueue_Push(ANTO_CHECK, NULL, 0);
+
           if(ANTO_Recived_flag.PID1)
           {
              pidX = &pidRateX;
