@@ -596,6 +596,8 @@ static void sample_live_channels(void)
   uint16_t roll;
   uint16_t pitch;
   int32_t thr_calc;
+  int32_t yaw_calc;
+  int32_t roll_calc;
 
   /* Convert raw ADC values to 1000-2000 remote-control channels.
    * This also applies calibration, trim, simple filtering and local battery sampling.
@@ -608,18 +610,20 @@ static void sample_live_channels(void)
   if (thr_calc < 1000) thr_calc = 1000;
   if (thr_calc > 2000) thr_calc = 2000;
   thr = (uint16_t)thr_calc;
-  yaw = (uint16_t)(map_center_channel(
-      ADC_ConvertedValue[REMOTE_ADC_YAW_INDEX],
-      g_cfg.adc_min[REMOTE_ADC_YAW_INDEX],
-      g_cfg.adc_mid[REMOTE_ADC_YAW_INDEX],
-      g_cfg.adc_max[REMOTE_ADC_YAW_INDEX],
-      1U) + offset.yaw);
-  roll = (uint16_t)(map_center_channel(
-      ADC_ConvertedValue[REMOTE_ADC_ROL_INDEX],
-      g_cfg.adc_min[REMOTE_ADC_ROL_INDEX],
-      g_cfg.adc_mid[REMOTE_ADC_ROL_INDEX],
-      g_cfg.adc_max[REMOTE_ADC_ROL_INDEX],
-      1U) + offset.roll);
+
+  /* Match the original remote for Y/R too: both channels are inverted raw ADC.
+   * This keeps their full 1000-2000 travel even if stored stick calibration is bad.
+   */
+  yaw_calc = 2000 - (int32_t)((ADC_ConvertedValue[REMOTE_ADC_YAW_INDEX] + 2U) >> 2) + offset.yaw;
+  if (yaw_calc < 1000) yaw_calc = 1000;
+  if (yaw_calc > 2000) yaw_calc = 2000;
+  yaw = (uint16_t)yaw_calc;
+
+  roll_calc = 2000 - (int32_t)((ADC_ConvertedValue[REMOTE_ADC_ROL_INDEX] + 2U) >> 2) + offset.roll;
+  if (roll_calc < 1000) roll_calc = 1000;
+  if (roll_calc > 2000) roll_calc = 2000;
+  roll = (uint16_t)roll_calc;
+
   pitch = (uint16_t)(map_center_channel(
       ADC_ConvertedValue[REMOTE_ADC_PIT_INDEX],
       g_cfg.adc_min[REMOTE_ADC_PIT_INDEX],
