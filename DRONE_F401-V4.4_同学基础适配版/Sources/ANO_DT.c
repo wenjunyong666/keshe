@@ -23,6 +23,7 @@ extern uint8_t nrf2401_tx_flag;
 extern UART_HandleTypeDef huart1;
 extern uint32_t baro_height;
 extern void Reset_Idle(void);
+extern uint8_t fc_sleep_counting;
 
 static struct{
   uint8_t PID1 :1;
@@ -236,11 +237,16 @@ void ANO_Recive(uint8_t *pt)
                  {
                    ALL_flag.unlock = (rc_locked == 0U) ? 1U : 0U;
                  }
-                 if(rc_locked_idle == 0U)
-                 {
-                   Reset_Idle();
-                 }
-               }
+                  if(rc_locked_idle == 0U)
+                  {
+                    fc_sleep_counting = 0U;
+                    Reset_Idle();
+                  }
+                  else
+                  {
+                    fc_sleep_counting = 1U;
+                  }
+                }
 
                {
                      const float roll_pitch_ratio = 0.02f;//0.04f

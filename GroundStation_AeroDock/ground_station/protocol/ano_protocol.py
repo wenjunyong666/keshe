@@ -145,13 +145,18 @@ class ANOProtocol:
             return {}
 
         values = struct.unpack(">hhhhhhhhh", data[:18])
+        # FC _st_Mpu order is fixed as:
+        # accX, accY, accZ, gyroX, gyroY, gyroZ, then AK8975 magX/Y/Z.
+        # Only unit conversion happens here; axis order is not rearranged.
+        acc_scale = 9.80665 / 8192.0
+        gyro_scale = 1.0 / 131.0
         return {
-            "acc_x": values[0] / 100.0,
-            "acc_y": values[1] / 100.0,
-            "acc_z": values[2] / 100.0,
-            "gyro_x": values[3] / 100.0,
-            "gyro_y": values[4] / 100.0,
-            "gyro_z": values[5] / 100.0,
+            "acc_x": values[0] * acc_scale,
+            "acc_y": values[1] * acc_scale,
+            "acc_z": values[2] * acc_scale,
+            "gyro_x": values[3] * gyro_scale,
+            "gyro_y": values[4] * gyro_scale,
+            "gyro_z": values[5] * gyro_scale,
             "mag_x": values[6],
             "mag_y": values[7],
             "mag_z": values[8],

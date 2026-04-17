@@ -82,6 +82,7 @@ char uart_rx_buf[128];
 uint8_t uart_rx_len = 0;
 // FC soft-sleep timing state
 uint32_t idle_tick = 0;          // last non-idle tick for FC soft sleep
+uint8_t fc_sleep_counting = 0U;  // only count down after remote reports locked-idle
 static uint8_t fc_soft_sleeping = 0U;
 #define SLEEP_TIME 60000         // legacy 60s timeout value
 
@@ -121,6 +122,10 @@ void Enter_Standby(void)
   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, 0);
   ALL_flag.unlock = 0;
   LED.status = AlwaysOff;
+  HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(LED4_GPIO_Port, LED4_Pin, GPIO_PIN_SET);
   fc_soft_sleeping = 1U;
 }
 // Reset FC soft-sleep timer and wake from soft sleep.
@@ -395,6 +400,7 @@ HAL_Delay(1000);
   { 
     // Enter FC soft sleep after the configured locked-idle timeout.
     if((g_fc_idle_sleep_seconds != 0U) &&
+       (fc_sleep_counting != 0U) &&
        (fc_soft_sleeping == 0U) &&
        ((HAL_GetTick() - idle_tick) >= ((uint32_t)g_fc_idle_sleep_seconds * 1000U)))
     {
