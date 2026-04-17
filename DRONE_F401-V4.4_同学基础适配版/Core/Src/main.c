@@ -137,7 +137,23 @@ void Reset_Idle(void)
 
 static void FC_SendTelemetryWindow(void)
 {
+  static uint32_t last_telemetry_tx_tick = 0U;
+  uint32_t now = HAL_GetTick();
   uint8_t len = txbuf_pos;
+
+  /* Do not steal NRF airtime while the aircraft is unlocked.  The remote
+     control packets have priority; telemetry can resume after locking. */
+  if(ALL_flag.unlock != 0U)
+  {
+    return;
+  }
+
+  /* Keep telemetry sparse because this project does not use NRF ACK payloads.
+     Each active send briefly switches the FC radio away from RX mode. */
+  if((now - last_telemetry_tx_tick) < 120U)
+  {
+    return;
+  }
 
   if(len == 0U)
   {
@@ -154,6 +170,7 @@ static void FC_SendTelemetryWindow(void)
   (void)NRF24L01_TxPacket(nrf2401_txbuf, len);
   TX2RX();
   txbuf_pos = 0U;
+  last_telemetry_tx_tick = now;
 }
 
 extern uint8_t RC_rxData[32];
